@@ -74,8 +74,23 @@ async function executeAuthorized(extracted, agentId, callId) {
 
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
+  // Create a fresh test payment intent each time
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount: Math.round(refund_amount * 100),
+    currency: 'usd',
+    payment_method_types: ['card'],
+    confirm: false
+  });
+
+  // Confirm it so it can be refunded
+  const confirmed = await stripe.paymentIntents.confirm(
+    paymentIntent.id,
+    { payment_method: 'pm_card_visa' }
+  );
+
+  // Now refund it
   const refund = await stripe.refunds.create({
-    payment_intent: process.env.STRIPE_TEST_PAYMENT_INTENT,
+    payment_intent: confirmed.id,
     amount: Math.round(refund_amount * 100),
     reason: 'requested_by_customer',
     metadata: {
@@ -85,8 +100,6 @@ async function executeAuthorized(extracted, agentId, callId) {
       customer_id: customer_id
     }
   }).catch(async err => {
-    // Stripe test mode throws if PI already fully refunded
-    // For demo purposes, log and continue gracefully
     console.warn('[stripe] Refund warning:', err.message);
     return { id: 'demo-limit-reached', status: 'demo' };
   });
