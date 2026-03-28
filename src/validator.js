@@ -51,6 +51,8 @@ Respond with this exact JSON structure:
   });
 
   const text = response.choices[0].message.content.trim();
-  const clean = text.replace(/\`\`\`json|\`\`\`/g, '').trim();
+  console.log("RAW GROQ RESPONSE:");
+  console.log(text);
+  const clean = text.replace(/\`\`\`json|\`\`\`/gi, '').trim();
   return JSON.parse(clean);
 }

@@ -2,16 +2,35 @@ const { parseTranscript } = require('./parser');
 const { validateWithGroq } = require('./validator');
 const { executeAuthorized, executeEscalation, executeFlag } = require('./actions');
 
+const fs = require('fs').promises;
+const path = require('path');
+
 const log = console.log;
 const scalekit = {
-  fetchDoc: async (docName) => `MOCK DOC: ${docName}`
+  fetchDoc: async (docName) => {
+    try {
+      if (docName === 'orders.json') {
+        const data = await fs.readFile(path.join(__dirname, '../docs/orders.json'), 'utf8');
+        return JSON.parse(data);
+      } else {
+        return await fs.readFile(path.join(__dirname, '../docs/', docName), 'utf8');
+      }
+    } catch (err) {
+      console.error('Error fetching doc:', err);
+      return '';
+    }
+  }
 };
 
 async function processMeeting(transcript, agentId, callId, scenario) {
 
   // Step 1 — parse transcript
   const extracted = await parseTranscript(transcript, scenario);
-  if (!extracted.refund_promised) return log('No refund promised — nothing to do');
+  if (!extracted.refund_promised) {
+    const msg = 'No refund promised — nothing to do';
+    log(msg);
+    return { success: true, message: msg };
+  }
 
   // Step 2 — fetch internal docs via Scalekit
   const policy = await scalekit.fetchDoc('refund-policy.md');
