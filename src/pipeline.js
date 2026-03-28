@@ -1,23 +1,22 @@
-const { parseTranscript } = require('./parser');
-const { checkAuthorized } = require('./auth');
-const { executeAuthorized, executeEscalation } = require('./actions');
+export async function processMeeting(transcript, agentId, callId) {
 
-async function processMeeting(transcript, agentId, callId, scenario) {
-  console.log(`processMeeting started for callId: ${callId}`);
-  
-  const parsedData = await parseTranscript(transcript, scenario);
-  console.log("Parsed Data:", parsedData);
-  
-  const authResult = await checkAuthorized(agentId, parsedData.refund_amount);
-  console.log("Auth Result:", authResult);
-  
-  let actionLog = "";
-  if (authResult.authorized) {
-    actionLog = await executeAuthorized(parsedData.refund_amount, parsedData.customer_id, agentId, callId);
+  // Step 1 — parse transcript
+  const extracted = await parseTranscript(transcript);
+  if (!extracted.refund_promised) return log('No refund promised — nothing to do');
+
+  // Step 2 — fetch internal docs via Scalekit
+  const policy = await scalekit.fetchDoc('refund-policy.md');
+  const orderDB = await scalekit.fetchDoc('orders.json');
+
+  // Step 3 — Claude validates everything in one pass
+  const decision = await validateWithGroq({ extracted, policy, orderDB });
+
+  // Step 4 — act on Claude's decision
+  if (decision.action === 'approve') {
+    await executeAuthorized(extracted, callId);
+  } else if (decision.action === 'escalate') {
+    await executeEscalation(extracted, decision.reason, callId);
   } else {
-    actionLog = await executeEscalation(parsedData.refund_amount, parsedData.customer_id, parsedData.refund_reason, transcript, authResult.limit);
+    await flagDiscrepancy(extracted, decision.reason, callId);
   }
-  return { parsedData, authResult, actionLog };
 }
-
-module.exports = { processMeeting };
