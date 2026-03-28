@@ -1,6 +1,7 @@
 const { parseTranscript } = require('./parser');
 const { validateWithGroq } = require('./validator');
 const { executeAuthorized, executeEscalation, executeFlag } = require('./actions');
+const { updatePipeline } = require('./pipeline-state');
 
 const fs = require('fs').promises;
 const path = require('path');
@@ -29,15 +30,20 @@ async function processMeeting(transcript, agentId, callId, scenario) {
   if (!extracted.refund_promised) {
     const msg = 'No refund promised — nothing to do';
     log(msg);
+    updatePipeline('flagged', msg);
     return { success: true, message: msg };
   }
+
+  updatePipeline('validating', `Extracted $${extracted.refund_amount} refund for ${extracted.customer_id} (${extracted.order_id})`);
 
   // Step 2 — fetch internal docs via Scalekit
   const policy = await scalekit.fetchDoc('refund-policy.md');
   const orderDB = await scalekit.fetchDoc('orders.json');
 
-  // Step 3 — Claude validates everything in one pass
+  // Step 3 — Groq validates everything in one pass
   const decision = await validateWithGroq({ extracted, policy, orderDB });
+
+  updatePipeline('validating', `Groq decision: ${decision.action} — ${decision.reason}`);
 
   // Step 4 — act on Groq's decision
   let actionResult;

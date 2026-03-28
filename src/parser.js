@@ -4,7 +4,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 async function parseTranscript(transcript, scenario) {
   console.log("parseTranscript called", { scenario });
   
-  if (process.env.MOCK_MODE === 'true' && scenario) {
+  if (scenario) {
     if (scenario === 'authorized') {
       return { refund_promised: true, refund_amount: 47, refund_reason: "wrong item shipped", order_id: "ORD-8821", customer_id: "cus_8821", customer_name: "Sarah Chen", sentiment: "negative" };
     } else if (scenario === 'escalate') {

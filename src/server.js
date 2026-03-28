@@ -11,11 +11,28 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
 // ── In-memory bot→agent mapping ──────────────────────────────
-const botSessions = {}; // bot_id → agent_id
+const botSessions = {}; // bot_id → { agent_id, transcript_id }
+
+// ── Pipeline state (shared, no circular deps) ───────────────
+const { pipelineState, updatePipeline } = require('./pipeline-state');
 
 // ── Health check ─────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+// ── Pipeline status (for dashboard polling) ──────────────────
+app.get('/pipeline-status', (req, res) => {
+  res.json(pipelineState);
+});
+
+// ── Pipeline reset ───────────────────────────────────────────
+app.post('/pipeline-reset', (_req, res) => {
+  pipelineState.stage = 'idle';
+  pipelineState.lastMessage = null;
+  pipelineState.log = [];
+  pipelineState.updatedAt = new Date().toISOString();
+  res.json({ ok: true });
 });
 
 // ── Webhook health check (GET) ───────────────────────────────
@@ -31,11 +48,11 @@ app.post('/webhook/meetstream', async (req, res) => {
   console.log(`[meetstream] event=${event} bot_id=${bot_id} status=${bot_status ?? ''}`);
 
   if (event === 'bot.joining') {
-    console.log('[meetstream] Bot is joining...');
+    updatePipeline('joining', 'Bot joining meeting...');
   }
 
   if (event === 'bot.inmeeting') {
-    console.log('[meetstream] Bot is live in the meeting — speak clearly!');
+    updatePipeline('inmeeting', 'Bot live in meeting — speak clearly!');
   }
 
   if (event === 'audio.processed') {
@@ -48,9 +65,11 @@ app.post('/webhook/meetstream', async (req, res) => {
 
   if (event === 'bot.stopped') {
     console.log(`[meetstream] Bot stopped — reason: ${bot_status} — ${message ?? ''}`);
+    updatePipeline('stopped', 'Meeting ended — fetching transcript');
 
     if (bot_status === 'NotAllowed' || bot_status === 'Denied' || bot_status === 'Error') {
       console.error('[meetstream] Bot failed:', message);
+      updatePipeline('flagged', `Bot failed: ${message ?? bot_status}`);
       return;
     }
 
@@ -66,9 +85,11 @@ app.post('/webhook/meetstream', async (req, res) => {
       const transcript = await fetchTranscript(bot_id, transcriptId);
       console.log(`[meetstream] Transcript (${transcript.length} chars):`, transcript.slice(0, 200));
 
+      updatePipeline('parsing', `Transcript received (${transcript.length} chars) — parsing with Groq...`);
       await processMeeting(transcript, agentId, bot_id);
     } catch (err) {
       console.error('[meetstream] Pipeline error:', err.message);
+      updatePipeline('flagged', `Pipeline error: ${err.message}`);
     }
   }
 });
@@ -93,13 +114,15 @@ app.post('/join', async (req, res) => {
   }
 });
 
-// ── Test route (existing) ────────────────────────────────────
+// ── Test route ───────────────────────────────────────────────
 app.post('/test/:scenario', async (req, res) => {
   console.log(`Test scenario triggered: ${req.params.scenario}`);
+  updatePipeline('joining', `Test scenario: ${req.params.scenario}`);
   try {
     const result = await processMeeting(null, 'agent_junior', 'test_call_123', req.params.scenario);
     res.json(result);
   } catch (err) {
+    updatePipeline('flagged', `Test error: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 });
@@ -113,5 +136,6 @@ app.get('/dashboard', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
   console.log(`Webhook endpoint: POST /webhook/meetstream`);
+  console.log(`Dashboard: http://localhost:${PORT}/dashboard`);
   console.log(`MOCK_MODE: ${process.env.MOCK_MODE}`);
 });

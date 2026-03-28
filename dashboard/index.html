@@ -1,36 +1,261 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Refund Resolution Bot Dashboard</title>
+  <title>Refund Resolution Bot</title>
   <style>
-    body { font-family: system-ui, sans-serif; padding: 20px; }
-    button { padding: 10px 15px; margin-right: 10px; cursor: pointer; }
-    pre { background: #f4f4f4; padding: 15px; border-radius: 5px; margin-top: 20px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+      background: #0f0f0f; color: #e0e0e0; 
+      padding: 2rem; min-height: 100vh;
+    }
+    h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 2rem; color: #fff; }
+    
+    .pipeline { display: flex; gap: 0; margin-bottom: 2rem; }
+    .stage {
+      flex: 1; padding: 1rem; text-align: center;
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      transition: all 0.4s ease; position: relative;
+    }
+    .stage:not(:last-child)::after {
+      content: '→'; position: absolute; right: -12px; top: 50%;
+      transform: translateY(-50%); color: #444; z-index: 1;
+      font-size: 1rem;
+    }
+    .stage .icon { font-size: 1.5rem; margin-bottom: 6px; }
+    .stage .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stage .sublabel { font-size: 10px; color: #555; margin-top: 4px; }
+
+    .stage.active   { background: #1a2a1a; border-color: #2d6a2d; }
+    .stage.active .label { color: #4caf50; }
+    .stage.success  { background: #1a2a1a; border-color: #4caf50; }
+    .stage.success .label { color: #4caf50; }
+    .stage.escalated { background: #2a1f0a; border-color: #f59e0b; }
+    .stage.escalated .label { color: #f59e0b; }
+    .stage.flagged  { background: #2a0f0f; border-color: #ef4444; }
+    .stage.flagged .label { color: #ef4444; }
+    .stage.pending  { background: #1a1a2a; border-color: #3b82f6; }
+    .stage.pending .label { color: #3b82f6; }
+
+    .status-bar {
+      display: flex; align-items: center; gap: 12px;
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      border-radius: 6px; padding: 12px 16px; margin-bottom: 1.5rem;
+    }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #444; flex-shrink: 0; }
+    .status-dot.active { background: #4caf50; animation: pulse 1.5s infinite; }
+    .status-dot.escalated { background: #f59e0b; }
+    .status-dot.flagged { background: #ef4444; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .status-text { font-size: 13px; color: #ccc; }
+    .status-time { font-size: 11px; color: #555; margin-left: auto; }
+
+    .controls { display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .btn {
+      padding: 8px 16px; border-radius: 6px; border: 1px solid #333;
+      background: #1a1a1a; color: #ccc; cursor: pointer; font-size: 13px;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: #2a2a2a; border-color: #444; color: #fff; }
+    .btn.primary { border-color: #2d6a2d; color: #4caf50; }
+    .btn.primary:hover { background: #1a2a1a; }
+    .btn.warn { border-color: #7a5a00; color: #f59e0b; }
+    .btn.warn:hover { background: #2a1f0a; }
+    .btn.danger { border-color: #7a0000; color: #ef4444; }
+    .btn.danger:hover { background: #2a0f0f; }
+
+    .join-row { display: flex; gap: 8px; margin-bottom: 1.5rem; }
+    .join-row input {
+      flex: 1; padding: 8px 12px; background: #1a1a1a; 
+      border: 1px solid #333; border-radius: 6px; 
+      color: #ccc; font-size: 13px;
+    }
+    .join-row input::placeholder { color: #555; }
+
+    .log-panel {
+      background: #0a0a0a; border: 1px solid #1a1a1a;
+      border-radius: 6px; padding: 1rem;
+      font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px;
+      min-height: 200px; max-height: 300px; overflow-y: auto;
+    }
+    .log-entry { padding: 3px 0; border-bottom: 1px solid #111; display: flex; gap: 12px; }
+    .log-time { color: #444; flex-shrink: 0; }
+    .log-msg { color: #888; }
+    .log-msg.authorized { color: #4caf50; }
+    .log-msg.escalated { color: #f59e0b; }
+    .log-msg.flagged { color: #ef4444; }
+    .log-msg.active { color: #3b82f6; }
+    .empty { color: #333; font-size: 12px; padding: 1rem 0; }
   </style>
 </head>
 <body>
-  <h1>Refund Resolution Bot</h1>
-  <button onclick="testScenario('authorized')">Test: Authorized</button>
-  <button onclick="testScenario('escalate')">Test: Escalate</button>
-  <button onclick="testScenario('no_refund')">Test: No Refund</button>
-  <button onclick="testScenario('flag')">Test: Flag</button>
 
-  <pre id="output">Click a button to test a scenario...</pre>
+<h1>Refund Resolution Bot</h1>
 
-  <script>
-    async function testScenario(scenario) {
-      const outputEl = document.getElementById('output');
-      outputEl.textContent = 'Running test...';
-      try {
-        const response = await fetch(`/test/${scenario}`, { method: 'POST' });
-        const data = await response.json();
-        outputEl.textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        outputEl.textContent = 'Error: ' + err.message;
-      }
-    }
-  </script>
+<div class="pipeline">
+  <div class="stage" id="stage-meeting">
+    <div class="icon">📞</div>
+    <div class="label">Meeting</div>
+    <div class="sublabel" id="sub-meeting">Waiting</div>
+  </div>
+  <div class="stage" id="stage-transcript">
+    <div class="icon">📝</div>
+    <div class="label">Transcript</div>
+    <div class="sublabel" id="sub-transcript">—</div>
+  </div>
+  <div class="stage" id="stage-validate">
+    <div class="icon">🔍</div>
+    <div class="label">Validate</div>
+    <div class="sublabel" id="sub-validate">—</div>
+  </div>
+  <div class="stage" id="stage-auth">
+    <div class="icon">🔐</div>
+    <div class="label">Auth</div>
+    <div class="sublabel" id="sub-auth">—</div>
+  </div>
+  <div class="stage" id="stage-action">
+    <div class="icon">⚡</div>
+    <div class="label">Action</div>
+    <div class="sublabel" id="sub-action">—</div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="status-dot" id="status-dot"></div>
+  <div class="status-text" id="status-text">Idle — waiting for a meeting to end</div>
+  <div class="status-time" id="status-time"></div>
+</div>
+
+<div class="controls">
+  <button class="btn primary" onclick="testScenario('authorized')">
+    Test: Authorized ($47) →
+  </button>
+  <button class="btn warn" onclick="testScenario('escalate')">
+    Test: Escalate ($300) →
+  </button>
+  <button class="btn danger" onclick="testScenario('flag')">
+    Test: Flag (expired) →
+  </button>
+  <button class="btn" onclick="resetPipeline()">Reset</button>
+</div>
+
+<div class="join-row">
+  <input type="text" id="meeting-url" placeholder="https://meet.google.com/abc-defg-hij" />
+  <input type="text" id="agent-id" placeholder="agent@demo.com" value="agent@demo.com" style="max-width:200px" />
+  <button class="btn primary" onclick="joinMeeting()">Send bot to meeting →</button>
+</div>
+
+<div class="log-panel" id="log-panel">
+  <div class="empty">No activity yet — run a test or send bot to a meeting</div>
+</div>
+
+<script>
+const STAGE_MAP = {
+  idle:       { stage: null,         dot: '',          text: 'Idle — waiting for a meeting' },
+  joining:    { stage: 'meeting',    dot: 'active',    text: 'Bot joining meeting...' },
+  inmeeting:  { stage: 'meeting',    dot: 'active',    text: 'Bot live in meeting — speak now' },
+  stopped:    { stage: 'transcript', dot: 'active',    text: 'Meeting ended — fetching transcript' },
+  parsing:    { stage: 'transcript', dot: 'active',    text: 'Transcript received — parsing with Groq' },
+  validating: { stage: 'validate',   dot: 'active',    text: 'Groq validating against policy...' },
+  authorized: { stage: 'action',     dot: 'active',    text: '✓ Refund processed automatically' },
+  escalated:  { stage: 'action',     dot: 'escalated', text: '⚠ Escalation ticket created' },
+  flagged:    { stage: 'action',     dot: 'flagged',   text: '✗ Flagged — policy violation' }
+};
+
+const STAGE_ORDER = ['meeting', 'transcript', 'validate', 'auth', 'action'];
+
+let lastLogCount = 0;
+
+function applyState(data) {
+  const map = STAGE_MAP[data.stage] ?? STAGE_MAP.idle;
+
+  // Reset all stages
+  STAGE_ORDER.forEach(s => {
+    const el = document.getElementById('stage-' + s);
+    el.className = 'stage';
+  });
+
+  // Light up stages up to current
+  if (map.stage) {
+    const idx = STAGE_ORDER.indexOf(map.stage);
+    STAGE_ORDER.slice(0, idx).forEach(s => {
+      document.getElementById('stage-' + s).classList.add('success');
+    });
+    const activeClass = data.stage === 'escalated' ? 'escalated' 
+                      : data.stage === 'flagged' ? 'flagged' 
+                      : 'active';
+    document.getElementById('stage-' + map.stage).classList.add(activeClass);
+  }
+
+  // Status bar
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot' + (map.dot ? ' ' + map.dot : '');
+  document.getElementById('status-text').textContent = data.lastMessage ?? map.text;
+  if (data.updatedAt) {
+    document.getElementById('status-time').textContent = 
+      new Date(data.updatedAt).toLocaleTimeString();
+  }
+
+  // Log
+  if (data.log && data.log.length !== lastLogCount) {
+    const panel = document.getElementById('log-panel');
+    // Clear placeholder
+    const empties = panel.querySelectorAll('.empty');
+    empties.forEach(e => e.remove());
+
+    // Rebuild log from scratch (simplest approach for polling)
+    panel.innerHTML = '';
+    data.log.forEach(entry => {
+      const div = document.createElement('div');
+      div.className = 'log-entry';
+      const msgClass = ['authorized','escalated','flagged'].includes(entry.stage) 
+        ? entry.stage : 'active';
+      div.innerHTML = `
+        <span class="log-time">${entry.time}</span>
+        <span class="log-msg ${msgClass}">${entry.message}</span>
+      `;
+      panel.appendChild(div);
+    });
+
+    lastLogCount = data.log.length;
+  }
+}
+
+async function poll() {
+  try {
+    const res = await fetch('/pipeline-status');
+    const data = await res.json();
+    applyState(data);
+  } catch(e) {}
+}
+
+async function testScenario(type) {
+  await fetch(`/test/${type}`, { method: 'POST' });
+}
+
+async function joinMeeting() {
+  const url = document.getElementById('meeting-url').value.trim();
+  const agentId = document.getElementById('agent-id').value.trim();
+  if (!url) { alert('Enter a meeting URL first'); return; }
+  const res = await fetch('/join', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ meeting_url: url, agent_id: agentId })
+  });
+  const data = await res.json();
+  console.log('Bot joined:', data);
+  alert(`Bot joining! ID: ${data.bot_id ?? 'check console'}`);
+}
+
+async function resetPipeline() {
+  await fetch('/pipeline-reset', { method: 'POST' });
+  lastLogCount = 0;
+  document.getElementById('log-panel').innerHTML = 
+    '<div class="empty">No activity yet — run a test or send bot to a meeting</div>';
+}
+
+setInterval(poll, 1500);
+poll();
+</script>
 </body>
 </html>

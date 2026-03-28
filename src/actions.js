@@ -1,5 +1,6 @@
 const { ScalekitClient } = require('@scalekit-sdk/node');
 const Stripe = require('stripe');
+const { updatePipeline } = require('./pipeline-state');
 
 // ── Scalekit client (handles OAuth tokens for Jira) ──────────
 const scalekit = new ScalekitClient(
@@ -91,6 +92,7 @@ async function executeAuthorized(extracted, agentId, callId) {
   });
 
   console.log(`[stripe] Refund created: ${refund.id} status=${refund.status}`);
+  updatePipeline('authorized', `Refund of $${refund_amount} processed ✓ (${refund.id})`);
 
   await notifySlack(
     `:white_check_mark: *Refund processed automatically*\n` +
@@ -157,6 +159,7 @@ async function executeEscalation(extracted, reason, callId, limit) {
   try {
     const ticket = await createJiraTicket(body);
     console.log(`[jira] Ticket created: ${ticket.key}`);
+    updatePipeline('escalated', `Escalation ticket ${ticket.key} created for $${refund_amount}`);
 
     // Update Slack with the real ticket number
     await notifySlack(
@@ -222,6 +225,7 @@ async function executeFlag(extracted, decision, callId) {
   try {
     const ticket = await createJiraTicket(body);
     console.log(`[jira] Flag ticket created: ${ticket.key}`);
+    updatePipeline('flagged', `Flagged — ${decision.reason} (${ticket.key})`);
     await notifySlack(`:ticket: Flag ticket *${ticket.key}* — ${process.env.JIRA_BASE_URL}/browse/${ticket.key}`);
   } catch (err) {
     console.error('[jira] Flag ticket failed:', err.message);
