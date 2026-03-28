@@ -1,7 +1,7 @@
 const { parseTranscript } = require('./parser');
 const { validateWithGroq } = require('./validator');
 const { executeAuthorized, executeEscalation, executeFlag } = require('./actions');
-const { updatePipeline } = require('./pipeline-state');
+const { updatePipeline, updateMetrics } = require('./pipeline-state');
 
 const fs = require('fs').promises;
 const path = require('path');
@@ -169,10 +169,13 @@ async function processMeeting(transcript, agentId, callId, scenario) {
   let actionResult;
   if (decision.action === 'approve') {
     actionResult = await executeAuthorized(extracted, agentId, callId);
+    updateMetrics({ timeSaved: 15, dollarsSaved: 0, isFraudulent: false });
   } else if (decision.action === 'escalate') {
     actionResult = await executeEscalation(extracted, decision.reason, callId, 100);
+    updateMetrics({ timeSaved: 15, dollarsSaved: 0, isFraudulent: false });
   } else {
     actionResult = await executeFlag(extracted, decision, callId);
+    updateMetrics({ timeSaved: 15, dollarsSaved: extracted.refund_amount, isFraudulent: true });
   }
 
   return {

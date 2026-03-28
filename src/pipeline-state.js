@@ -8,7 +8,13 @@ const pipelineState = {
   lastEvent: null,
   lastMessage: null,
   log: [],
-  updatedAt: null
+  updatedAt: null,
+  metrics: {
+    callsProcessed: 0,
+    timeSavedMinutes: 0,
+    dollarsSaved: 0,
+    fraudulentCalls: 0
+  }
 };
 
 function updatePipeline(stage, message) {
@@ -24,4 +30,26 @@ function updatePipeline(stage, message) {
   console.log(`[pipeline] ${stage}: ${message}`);
 }
 
-module.exports = { pipelineState, updatePipeline };
+function updateMetrics({ timeSaved = 0, dollarsSaved = 0, isFraudulent = false }) {
+  if (timeSaved) {
+    pipelineState.metrics.callsProcessed += 1;
+    pipelineState.metrics.timeSavedMinutes += timeSaved;
+  }
+  if (dollarsSaved) {
+    pipelineState.metrics.dollarsSaved += dollarsSaved;
+  }
+  if (isFraudulent) {
+    pipelineState.metrics.fraudulentCalls += 1;
+  }
+}
+
+function resetPipeline() {
+    pipelineState.stage = 'idle';
+    pipelineState.lastEvent = null;
+    pipelineState.lastMessage = null;
+    pipelineState.log = [];
+    pipelineState.updatedAt = null;
+    // We intentionally don't reset metrics so the tracker persists across demos
+}
+
+module.exports = { pipelineState, updatePipeline, updateMetrics, resetPipeline };

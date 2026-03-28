@@ -13,8 +13,7 @@ app.use(express.json());
 // ── In-memory bot→agent mapping ──────────────────────────────
 const botSessions = {}; // bot_id → { agent_id, transcript_id }
 
-// ── Pipeline state (shared, no circular deps) ───────────────
-const { pipelineState, updatePipeline } = require('./pipeline-state');
+const { pipelineState, updatePipeline, resetPipeline } = require('./pipeline-state');
 
 // ── Health check ─────────────────────────────────────────────
 app.get('/health', (req, res) => {
@@ -28,10 +27,7 @@ app.get('/pipeline-status', (req, res) => {
 
 // ── Pipeline reset ───────────────────────────────────────────
 app.post('/pipeline-reset', (_req, res) => {
-  pipelineState.stage = 'idle';
-  pipelineState.lastMessage = null;
-  pipelineState.log = [];
-  pipelineState.updatedAt = new Date().toISOString();
+  resetPipeline();
   res.json({ ok: true });
 });
 
