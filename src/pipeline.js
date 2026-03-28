@@ -34,11 +34,21 @@ async function processMeeting(transcript, agentId, callId, scenario) {
     return { success: true, message: msg };
   }
 
-  updatePipeline('validating', `Extracted $${extracted.refund_amount} refund for ${extracted.customer_id} (${extracted.order_id})`);
-
   // Step 2 — fetch internal docs via Scalekit
   const policy = await scalekit.fetchDoc('refund-policy.md');
   const orderDB = await scalekit.fetchDoc('orders.json');
+
+  // If the parser missed the amount or customer name, pull it from the DB
+  if (extracted.order_id && orderDB[extracted.order_id]) {
+    if (!extracted.refund_amount) {
+      extracted.refund_amount = orderDB[extracted.order_id].amount;
+    }
+    if (!extracted.customer_name) {
+      extracted.customer_name = orderDB[extracted.order_id].customerName;
+    }
+  }
+
+  updatePipeline('validating', `Extracted $${extracted.refund_amount} refund for ${extracted.customer_name || extracted.customer_id} (${extracted.order_id})`);
 
   // Step 3 — Groq validates everything in one pass
   const decision = await validateWithGroq({ extracted, policy, orderDB });

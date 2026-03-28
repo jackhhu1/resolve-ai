@@ -56,7 +56,7 @@ async function createJiraTicket(body) {
 // ── Actions ──────────────────────────────────────────────────
 
 async function executeAuthorized(extracted, agentId, callId) {
-  const { refund_amount, customer_id, order_id, refund_reason } = extracted;
+  const { refund_amount, customer_id, order_id, refund_reason, customer_name } = extracted;
   console.log("executeAuthorized called");
 
   if (process.env.MOCK_MODE === 'true') {
@@ -64,7 +64,7 @@ async function executeAuthorized(extracted, agentId, callId) {
     await notifySlack(
       `:white_check_mark: *Refund processed automatically*\n` +
       `> Amount: *$${refund_amount}*\n` +
-      `> Customer: ${customer_id}\n` +
+      `> Customer: ${customer_name} (${customer_id})\n` +
       `> Order: ${order_id}\n` +
       `> Reason: ${refund_reason}\n` +
       `> Ref: mock-ref-123`
@@ -97,7 +97,7 @@ async function executeAuthorized(extracted, agentId, callId) {
   await notifySlack(
     `:white_check_mark: *Refund processed automatically*\n` +
     `> Amount: *$${refund_amount}*\n` +
-    `> Customer: ${customer_id}\n` +
+    `> Customer: ${customer_name} (${customer_id})\n` +
     `> Order: ${order_id}\n` +
     `> Reason: ${refund_reason}\n` +
     `> Agent: ${agentId}\n` +
@@ -108,14 +108,14 @@ async function executeAuthorized(extracted, agentId, callId) {
 }
 
 async function executeEscalation(extracted, reason, callId, limit) {
-  const { refund_amount, customer_id, order_id, refund_reason } = extracted;
+  const { refund_amount, customer_id, order_id, refund_reason, customer_name } = extracted;
   console.log("executeEscalation called");
 
   // Always notify Slack first
   await notifySlack(
     `:warning: *Refund escalation required*\n` +
     `> Amount: *$${refund_amount}* exceeds agent limit of $${limit}\n` +
-    `> Customer: ${customer_id}\n` +
+    `> Customer: ${customer_name} (${customer_id})\n` +
     `> Order: ${order_id}\n` +
     `> Reason: ${refund_reason}\n` +
     `> Jira ticket being created...`
@@ -129,7 +129,7 @@ async function executeEscalation(extracted, reason, callId, limit) {
   const body = {
     fields: {
       project: { key: process.env.JIRA_PROJECT_KEY },
-      summary: `Refund approval needed: $${refund_amount} for ${customer_id}`,
+      summary: `Refund approval needed: $${refund_amount} for ${customer_name}`,
       description: {
         type: 'doc',
         version: 1,
@@ -139,7 +139,7 @@ async function executeEscalation(extracted, reason, callId, limit) {
             type: 'text',
             text: [
               `Order ID: ${order_id}`,
-              `Customer: ${customer_id}`,
+              `Customer: ${customer_name} (${customer_id})`,
               `Amount: $${refund_amount}`,
               `Reason: ${refund_reason}`,
               `Call ID: ${callId}`,
@@ -175,12 +175,13 @@ async function executeEscalation(extracted, reason, callId, limit) {
 }
 
 async function executeFlag(extracted, decision, callId) {
-  const { refund_amount, customer_id, order_id } = extracted;
+  const { refund_amount, customer_id, order_id, customer_name } = extracted;
   console.log("executeFlag called");
 
   await notifySlack(
     `:x: *Refund flagged — policy violation*\n` +
     `> Order: ${order_id}\n` +
+    `> Customer: ${customer_name} (${customer_id})\n` +
     `> Amount: $${refund_amount}\n` +
     `> Reason: ${decision.reason}\n` +
     `> Rule: ${decision.policy_rule_applied}\n` +
@@ -195,7 +196,7 @@ async function executeFlag(extracted, decision, callId) {
   const body = {
     fields: {
       project: { key: process.env.JIRA_PROJECT_KEY },
-      summary: `Policy violation flagged: $${refund_amount} for ${customer_id}`,
+      summary: `Policy violation flagged: $${refund_amount} for ${customer_name}`,
       description: {
         type: 'doc',
         version: 1,
@@ -205,7 +206,7 @@ async function executeFlag(extracted, decision, callId) {
             type: 'text',
             text: [
               `Order ID: ${order_id}`,
-              `Customer: ${customer_id}`,
+              `Customer: ${customer_name} (${customer_id})`,
               `Amount: $${refund_amount}`,
               `Violation: ${decision.reason}`,
               `Policy rule: ${decision.policy_rule_applied}`,
