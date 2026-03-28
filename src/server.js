@@ -16,9 +16,16 @@ app.post('/webhook/meetstream', (req, res) => {
   res.sendStatus(200);
 });
 
-app.post('/test/:scenario', (req, res) => {
+const { processMeeting } = require('./pipeline');
+
+app.post('/test/:scenario', async (req, res) => {
   console.log(`Test scenario triggered: ${req.params.scenario}`);
-  res.sendStatus(200);
+  try {
+    const result = await processMeeting(null, 'agent_junior', 'test_call_123', req.params.scenario);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/dashboard', (req, res) => {

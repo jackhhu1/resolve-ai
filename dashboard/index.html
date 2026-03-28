@@ -2,11 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Refund Resolution Bot Dashboard</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 20px; }
+    button { padding: 10px 15px; margin-right: 10px; cursor: pointer; }
+    pre { background: #f4f4f4; padding: 15px; border-radius: 5px; margin-top: 20px; }
+  </style>
 </head>
 <body>
   <h1>Refund Resolution Bot</h1>
-  <button>Test: Authorized</button>
-  <button>Test: Escalate</button>
+  <button onclick="testScenario('authorized')">Test: Authorized</button>
+  <button onclick="testScenario('escalate')">Test: Escalate</button>
+  <button onclick="testScenario('no_refund')">Test: No Refund</button>
+
+  <pre id="output">Click a button to test a scenario...</pre>
+
+  <script>
+    async function testScenario(scenario) {
+      const outputEl = document.getElementById('output');
+      outputEl.textContent = 'Running test...';
+      try {
+        const response = await fetch(`/test/${scenario}`, { method: 'POST' });
+        const data = await response.json();
+        outputEl.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        outputEl.textContent = 'Error: ' + err.message;
+      }
+    }
+  </script>
 </body>
 </html>
